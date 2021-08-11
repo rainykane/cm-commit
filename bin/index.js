@@ -48,19 +48,23 @@ const last = async () => {
     console.log('没有上次提交的记录');
     return;
   }else {
-    const account = JSON.parse(fs.readFileSync(CONFIG_PATH));
-    if(account.command) {
+    const { command } = JSON.parse(fs.readFileSync(CONFIG_PATH));
+    if(command) {
       const questions = [
         {
           type: "list",
           name: "history",
           choices: [{
-            name: account.command
+            name: command
+          }, {
+            name: '取消操作',
           }],
         }
       ];
       const answer = await inquirer.prompt(questions);
-      console.log(answer);
+      if(answer.history !== '取消') {
+        exec(command, { encoding: 'utf-8' });
+      }
     }else {
       console.log('没有上次提交的记录');
       return;
