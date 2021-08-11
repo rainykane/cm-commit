@@ -7,12 +7,12 @@ const fs = require('fs');
 const { 
   getCartList,
   getCartDetail,
+  getShortUrl,
   UA
 } = require('./request');
 
 const DOMAIN = 'https://www.tapd.cn/';
 const LOGIN_URL = 'https://www.tapd.cn/cloud_logins/login';
-const DASHBOARD_URL = 'https://www.tapd.cn/my_dashboard';
 const CONFIG_PATH = __dirname + '/.config';
 const CONFIG = { 
   headless: true,
@@ -42,9 +42,38 @@ const addUser = async () => {
   return account;
 }
 
+// 获取上次的命令
+const last = async () => {
+  if(!fs.existsSync(CONFIG_PATH)) {
+    console.log('没有上次提交的记录');
+    return;
+  }else {
+    const account = JSON.parse(fs.readFileSync(CONFIG_PATH));
+    if(account.command) {
+      const questions = [
+        {
+          type: "list",
+          name: "history",
+          choices: [{
+            name: account.command
+          }],
+        }
+      ];
+      const answer = await inquirer.prompt(questions);
+      console.log(answer);
+    }else {
+      console.log('没有上次提交的记录');
+      return;
+    }
+  }
+}
+
 // 登录
-const login = async (page, account) => {
+const login = async (account) => {
   console.log(`正在登陆tapd：${account.username},${account.password}`);
+  const browser = await puppeteer.launch(CONFIG);
+  const page = await browser.newPage();
+  await page.setUserAgent(UA);
   await page.goto(LOGIN_URL);
   await page.waitForSelector('#username');
   await page.type('#username', account.username);
@@ -53,23 +82,28 @@ const login = async (page, account) => {
   await page.waitForNavigation({
     waitUntil: 'load'
   });
+  const nickname = await page.$eval('.avatar-text-default.avatar-y', el => el.title );
+  account.nickname = nickname;
   const cookie = await page.cookies();
   global.cookie = cookie.map(item => `${item.name}=${item.value}`).join('; ');
   account.cookie = global.cookie;
   // 把cookie写入
   fs.writeFile(CONFIG_PATH, JSON.stringify(account), () => {});
+  await browser.close();
+  return account;
 }
 
 // 选择需求项
 const selectTask = async () => {
   const todoList = await getTodoList();
+  if(!todoList) return false;
   const choices = todoList.map((item) => {
     // 只拉Bug 和 需求（Story）
     const flag = item.type === 'Bug' || item.type === 'Story';
     return flag ? {
       key: item.id,
       name: `${item.type}: ${item.title}`,
-      value: item.title_url,
+      value: item,
     } : '';
   });
   const questions = [
@@ -85,10 +119,25 @@ const selectTask = async () => {
 // 获取我的待办需求
 const getTodoList = async () => {
   const res = await getCartList();
-  if(!res.data) return;
+  if(typeof res.data === 'string') return false;
   const cartId = res.data.data.find((item) => item.title === '我的待办').id;
   const detailRes = await getCartDetail(cartId);
   return detailRes?.data?.data?.list || [];
+}
+
+// 获取源码关联关键字
+const getKeyword = async (task, nickname) => {
+  const { id, type, title, title_url, workspace_id } = task;
+  const res = await getShortUrl(workspace_id, `${DOMAIN}${title_url}`);
+  const shortUrl = res.data;
+  const keyword = `--${type.toLowerCase()}=${id.slice(-7)} --user=${nickname} ${title} ${shortUrl}`;
+  return keyword
+}
+
+// 检查登录态
+const checkLogin = async () => {
+  const res = await getCartList();
+  return !(typeof res.data === 'string')
 }
 
 // 主流程
@@ -100,41 +149,39 @@ const run = async () => {
   }else {
     account = JSON.parse(fs.readFileSync(CONFIG_PATH));
   }
-  const browser = await puppeteer.launch(CONFIG);
-  const page = await browser.newPage();
-  await page.setUserAgent(UA);
-  // 判断是否需要登录？？
+  // 判断是否需要登录
   if(!account.cookie) {
-    console.log('99999999');
-    await login(page, account);
+    account = await login(account);
   }else {
-    page.setCookie = account.cookie;
-    await page.goto(DASHBOARD_URL);
-    await page.waitForNavigation({
-      waitUntil: "load"
-    })
+    global.cookie = account.cookie;
+    const flag = await checkLogin();
+    if(!flag) {
+      account = await login(account);
+    }
   }
   const answers = await selectTask();
-  await page.goto(`${DOMAIN}${answers.Task}`);
-  await page.waitForResponse(res => {
-    return res.request().url().includes('/generate_short_url') && res.ok();
-  })
-  const value = await page.$eval('#svn_keyword', el => el.dataset.clipboardText);
-  const command = `git commit -m 'feat: ${value}'`;
-  exec(command, { encoding: 'utf-8' });
+  const keyword = await getKeyword(answers.Task, account.nickname);
+  const msgFlag = answers.Task.type === 'Bug' ? 'fix' : 'feat';
+  const command = `git commit -m '${msgFlag}: ${keyword}'`;
   console.log(command);
-  await browser.close();
+  exec(command, { encoding: 'utf-8' });
+  // 将命令保存
+  account.command = command;
+  fs.writeFile(CONFIG_PATH, JSON.stringify(account), () => {});
 }
 
 const program = new Command();
 program
-  .version('0.0.1', '-v, --version', '查看版本号')
+  .version('1.0.0', '-v, --version', '查看版本号')
   .description('自动拉取tapd源码关联关键字并提交')
   .option('-u, --user', '修改账号密码')
+  .option('-l, --last', '获取上一次源码关联的commit')
   .parse(process.argv)
   .action((argv) => {
     if(argv.user) {
       addUser();
+    }else if(argv.last) {
+      last();
     }else {
       run();
     }
