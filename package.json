@@ -1,6 +1,6 @@
 {
   "name": "cm-commit",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "快速提交tapd源码关联关键字",
   "main": "index.js",
   "scripts": {

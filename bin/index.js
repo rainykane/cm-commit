@@ -37,6 +37,8 @@ const addUser = async () => {
   fs.writeFile(CONFIG_PATH, JSON.stringify(account), (error) => { 
     if(!error) {
       console.log('设置成功！');
+    }else {
+      console.log(error);
     }
   });
   return account;
@@ -83,9 +85,7 @@ const login = async (account) => {
   await page.type('#username', account.username);
   await page.type('#password_input', account.password);
   await page.click('#tcloud_login_button');
-  await page.waitForNavigation({
-    waitUntil: 'load'
-  });
+  await page.waitForSelector('.avatar-text-default.avatar-y');
   const nickname = await page.$eval('.avatar-text-default.avatar-y', el => el.title );
   account.nickname = nickname;
   const cookie = await page.cookies();
@@ -176,18 +176,28 @@ const run = async () => {
 
 const program = new Command();
 program
-  .version('1.2.0', '-v, --version', '查看版本号')
+  .version('1.2.1', '-v, --version', '查看版本号')
   .description('自动拉取tapd源码关联关键字并提交')
   .option('-u, --user', '修改账号密码')
   .option('-l, --last', '获取上一次源码关联的commit')
   .parse(process.argv)
   .action((argv) => {
-    if(argv.user) {
-      addUser();
-    }else if(argv.last) {
-      last();
-    }else {
-      run();
+    try{
+      // 需要提前判断并修改权限
+      fs.access(__dirname, fs.constants.R_OK | fs.constants.W_OK | fs.constants.X_OK, (error) => {
+        if(error) {
+          fs.chmodSync(__dirname, 0o777);
+        }
+        if(argv.user) {
+          addUser();
+        }else if(argv.last) {
+          last();
+        }else {
+          run();
+        }
+      })
+    }catch(error) {
+      console.log(error);
     }
   });
 
