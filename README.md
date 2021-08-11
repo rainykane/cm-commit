@@ -6,8 +6,9 @@
 
 `npm i -g cm-commit --registry http://47.106.165.142:4873`
 
-**如果npm全局包安装位置没有权限的话需要加上 `--unsafe-perm=true`**
+**如果npm全局包安装位置需要权限的话 `--unsafe-perm`**
 
+`sudo npm i -g cm-commit --registry http://47.106.165.142:4873 --unsafe-perm`
 
 ### 使用
 ---

@@ -74,7 +74,7 @@ const last = async () => {
 
 // 登录
 const login = async (account) => {
-  console.log(`正在登陆tapd：${account.username},${account.password}`);
+  console.log(`正在登陆tapd：${account.username}`);
   const browser = await puppeteer.launch(CONFIG);
   const page = await browser.newPage();
   await page.setUserAgent(UA);
@@ -176,7 +176,7 @@ const run = async () => {
 
 const program = new Command();
 program
-  .version('1.0.0', '-v, --version', '查看版本号')
+  .version('1.2.0', '-v, --version', '查看版本号')
   .description('自动拉取tapd源码关联关键字并提交')
   .option('-u, --user', '修改账号密码')
   .option('-l, --last', '获取上一次源码关联的commit')
