@@ -25,7 +25,7 @@ const addUser = async () => {
   const prompts = [
     {
       type: "input",
-      message: '用户名:',
+      message: '用户名（TAPD）:',
       name: "username",
     },
     {
@@ -46,7 +46,7 @@ const addUser = async () => {
 }
 
 // 获取上次的命令
-const last = async () => {
+const last = async (msg) => {
   if(!fs.existsSync(CONFIG_PATH)) {
     console.log('没有上次提交的记录');
     return;
@@ -58,7 +58,7 @@ const last = async () => {
           type: "list",
           name: "history",
           choices: [{
-            name: command
+            name: command.replace(/{msg}/g, msg)
           }, {
             name: '取消操作',
           }],
@@ -66,7 +66,7 @@ const last = async () => {
       ];
       const answer = await inquirer.prompt(questions);
       if(answer.history !== '取消') {
-        exec(command, { encoding: 'utf-8' });
+        exec(execCommand, { encoding: 'utf-8' });
       }
     }else {
       console.log('没有上次提交的记录');
@@ -77,7 +77,7 @@ const last = async () => {
 
 // 登录
 const login = async (account) => {
-  console.log(`正在登陆tapd：${account.username}`);
+  console.log(`正在登陆(TAPD)：${account.username}`);
   const browser = await puppeteer.launch(CONFIG);
   const page = await browser.newPage();
   await page.setUserAgent(UA);
@@ -86,16 +86,27 @@ const login = async (account) => {
   await page.type('#username', account.username);
   await page.type('#password_input', account.password);
   await page.click('#tcloud_login_button');
-  await page.waitForSelector('.avatar-text-default.avatar-y');
-  const nickname = await page.$eval('.avatar-text-default.avatar-y', el => el.title );
-  account.nickname = nickname;
-  const cookie = await page.cookies();
-  global.cookie = cookie.map(item => `${item.name}=${item.value}`).join('; ');
-  account.cookie = global.cookie;
-  // 把cookie写入
-  fs.writeFile(CONFIG_PATH, JSON.stringify(account), () => {});
-  await browser.close();
-  return account;
+  await page.waitForNavigation({
+    waitUntil: 'load'
+  });
+  const address = await page.evaluate(_ => document.location.href)
+  if(address.includes('/cloud_logins/login')) {
+    const error = await page.$eval('#error-tips', el => el.innerText);
+    console.log(error + '。请通过 cmc -u 重新设置账号');
+    await browser.close();
+    return false;
+  }else {
+    await page.waitForSelector('.avatar-text-default');
+    const nickname = await page.$eval('.avatar-text-default', el => el.title );
+    account.nickname = nickname;
+    const cookie = await page.cookies();
+    global.cookie = cookie.map(item => `${item.name}=${item.value}`).join('; ');
+    account.cookie = global.cookie;
+    // 把cookie写入
+    fs.writeFile(CONFIG_PATH, JSON.stringify(account), () => {});
+    await browser.close();
+    return account;
+  }
 }
 
 // 选择需求项
@@ -127,7 +138,7 @@ const getTodoList = async () => {
   if(typeof res.data === 'string') return false;
   const cartId = res.data.data.find((item) => item.title === '我的待办').id;
   const detailRes = await getCartDetail(cartId);
-  return detailRes?.data?.data?.list || [];
+  return detailRes.data.data.list;
 }
 
 // 获取源码关联关键字
@@ -146,7 +157,7 @@ const checkLogin = async () => {
 }
 
 // 主流程
-const run = async () => {
+const run = async (msg) => {
   let account;
   if(!fs.existsSync(CONFIG_PATH)) {
     await addUser();
@@ -164,23 +175,25 @@ const run = async () => {
       account = await login(account);
     }
   }
+  if(!account) return;
   const answers = await selectTask();
   const keyword = await getKeyword(answers.Task, account.nickname);
   const msgFlag = answers.Task.type === 'Bug' ? 'fix' : 'feat';
-  const command = `git commit -m '${msgFlag}: ${keyword}'`;
+  const command = `git commit -m '${msgFlag}: ${msg} ${keyword}'`;
   console.log(command);
   exec(command, { encoding: 'utf-8' });
   // 将命令保存
-  account.command = command;
+  account.command = `git commit -m '${msgFlag}: {msg} ${keyword}'`;
   fs.writeFile(CONFIG_PATH, JSON.stringify(account), () => {});
 }
 
 const program = new Command();
 program
-  .version('1.2.1', '-v, --version', '查看版本号')
+  .version('1.3.0', '-v, --version', '查看版本号')
   .description('自动拉取tapd源码关联关键字并提交')
   .option('-u, --user', '修改账号密码')
-  .option('-l, --last', '获取上一次源码关联的commit')
+  .option('-l, --last [value]', '获取上一次源码关联的commit')
+  .option('-m, --commit [value]', '添加自定义commit内容')
   .parse(process.argv)
   .action((argv) => {
     try{
@@ -197,9 +210,11 @@ program
         if(argv.user) {
           addUser();
         }else if(argv.last) {
-          last();
+          const msg = argv.last === true ? '' : argv.last;
+          last(msg);
         }else {
-          run();
+          const msg = argv.commit && typeof argv.commit === 'string' ? argv.commit : '';
+          run(msg);
         }
       })
     }catch(error) {
