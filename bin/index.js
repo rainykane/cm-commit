@@ -2,7 +2,8 @@
 const { Command } = require('commander');
 const inquirer = require("inquirer");
 const puppeteer = require('puppeteer');
-const { exec } = require('child_process');
+const os = require('os');
+const { exec, execSync } = require('child_process');
 const fs = require('fs');
 const { 
   getCartList,
@@ -186,7 +187,12 @@ program
       // 需要提前判断并修改权限
       fs.access(__dirname, fs.constants.R_OK | fs.constants.W_OK | fs.constants.X_OK, (error) => {
         if(error) {
-          fs.chmodSync(__dirname, 0o777);
+          console.log(os.type());
+          if(os.type === 'Windows_NT') {
+            console.log(`请赋予当前执行目录(${__dirname})的读写执行权限`)
+          }else {
+            execSync(`sudo chmod 777 ${__dirname}`, { encoding: 'utf-8' });
+          }
         }
         if(argv.user) {
           addUser();
