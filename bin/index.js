@@ -19,6 +19,14 @@ const CONFIG = {
   headless: true,
   args: [ '–disable-gpu', '–disable-dev-shm-usage', '–disable-setuid-sandbox', '–no-first-run', '–no-sandbox', '–no-zygote', '–single-process'] 
 };
+let browser,page;
+
+// 初始化 - 创建浏览器实例
+const init = async () => {
+  browser = await puppeteer.launch(CONFIG);
+  page = await browser.newPage();
+  await page.setUserAgent(UA);
+}
 
 // 填写用户名密码
 const addUser = async () => {
@@ -53,12 +61,13 @@ const last = async (msg) => {
   }else {
     const { command } = JSON.parse(fs.readFileSync(CONFIG_PATH));
     if(command) {
+      const execCommand = command.replace(/{msg}/g, msg);
       const questions = [
         {
           type: "list",
           name: "history",
           choices: [{
-            name: command.replace(/{msg}/g, msg)
+            name: execCommand
           }, {
             name: '取消操作',
           }],
@@ -78,9 +87,7 @@ const last = async (msg) => {
 // 登录
 const login = async (account) => {
   console.log(`正在登陆(TAPD)：${account.username}`);
-  const browser = await puppeteer.launch(CONFIG);
-  const page = await browser.newPage();
-  await page.setUserAgent(UA);
+  await init();
   await page.goto(LOGIN_URL);
   await page.waitForSelector('#username');
   await page.type('#username', account.username);
@@ -93,7 +100,6 @@ const login = async (account) => {
   if(address.includes('/cloud_logins/login')) {
     const error = await page.$eval('#error-tips', el => el.innerText);
     console.log(error + '。请通过 cmc -u 重新设置账号');
-    await browser.close();
     return false;
   }else {
     await page.waitForSelector('.avatar-text-default');
@@ -101,10 +107,9 @@ const login = async (account) => {
     account.nickname = nickname;
     const cookie = await page.cookies();
     global.cookie = cookie.map(item => `${item.name}=${item.value}`).join('; ');
-    account.cookie = global.cookie;
+    account.cookie = cookie;
     // 把cookie写入
     fs.writeFile(CONFIG_PATH, JSON.stringify(account), () => {});
-    await browser.close();
     return account;
   }
 }
@@ -112,10 +117,13 @@ const login = async (account) => {
 // 选择需求项
 const selectTask = async () => {
   const todoList = await getTodoList();
-  if(!todoList) return false;
+  if(!todoList || todoList.length === 0) {
+    console.log('您的TAPD没有待办需求哦，看来是工作不饱和鸭/doge');
+    return false;
+  };
   const choices = todoList.map((item) => {
-    // 只拉Bug 和 需求（Story）
-    const flag = item.type === 'Bug' || item.type === 'Story';
+    // 只拉Bug 和 需求（Story）- 需要兼容Task
+    const flag = item.type === 'Bug' || item.type === 'Story' || item.type === 'Task';
     return flag ? {
       key: item.id,
       name: `${item.type}: ${item.title}`,
@@ -150,6 +158,20 @@ const getKeyword = async (task, nickname) => {
   return keyword
 }
 
+// 获取Task的源码关联关键字
+const getTaskKeyword = async (task, cookie) => {
+  if(!browser || !page) {
+    await init();
+  }
+  const { title_url } = task;
+  await page.setCookie(...cookie);
+  await page.goto(`${DOMAIN}${title_url}`);
+  await page.waitForSelector('#ContentStoryId');
+  await page.$eval('#ContentStoryId', el => document.location.href = el.children[0].href);
+  await page.waitForResponse(res => res.url().includes('/generate_short_url') && res.ok());
+  return await page.$eval('#svn_keyword', el => el.dataset.clipboardText);
+}
+
 // 检查登录态
 const checkLogin = async () => {
   const res = await getCartList();
@@ -169,15 +191,25 @@ const run = async (msg) => {
   if(!account.cookie) {
     account = await login(account);
   }else {
-    global.cookie = account.cookie;
+    global.cookie = account.cookie.map(item => `${item.name}=${item.value}`).join('; ');;
     const flag = await checkLogin();
     if(!flag) {
       account = await login(account);
     }
   }
   if(!account) return;
+  if(!browser) init();
   const answers = await selectTask();
-  const keyword = await getKeyword(answers.Task, account.nickname);
+  if(!answers) {
+    await browser.close();
+    return;
+  }
+  let keyword;
+  if(answers.Task.type === 'Task') {
+    keyword = await getTaskKeyword(answers.Task, account.cookie);
+  }else {
+    keyword = await getKeyword(answers.Task, account.nickname);
+  }
   const msgFlag = answers.Task.type === 'Bug' ? 'fix' : 'feat';
   const command = `git commit -m '${msgFlag}: ${msg} ${keyword}'`;
   console.log(command);
@@ -185,17 +217,18 @@ const run = async (msg) => {
   // 将命令保存
   account.command = `git commit -m '${msgFlag}: {msg} ${keyword}'`;
   fs.writeFile(CONFIG_PATH, JSON.stringify(account), () => {});
+  await browser.close();
 }
 
 const program = new Command();
 program
-  .version('1.3.0', '-v, --version', '查看版本号')
+  .version('1.4.0', '-v, --version', '查看版本号')
   .description('自动拉取tapd源码关联关键字并提交')
   .option('-u, --user', '修改账号密码')
   .option('-l, --last [value]', '获取上一次源码关联的commit')
   .option('-m, --commit [value]', '添加自定义commit内容')
   .parse(process.argv)
-  .action((argv) => {
+  .action(async (argv) => {
     try{
       // 需要提前判断并修改权限
       fs.access(__dirname, fs.constants.R_OK | fs.constants.W_OK | fs.constants.X_OK, (error) => {

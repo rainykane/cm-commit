@@ -18,10 +18,10 @@ const postHeaders = {
   'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
 }
 
-// 获取我的代办cartId
+// 获取我的待办cartId
 const getCartList = () => axios.get(`${HOST}/my_dashboard/ajax_get_card_list/1`, { headers: { Referer: 'https://www.tapd.cn/my_dashboard?left_tree=1' }});
 
-// 获取我的代办详情
+// 获取我的待办详情
 const getCartDetail =  (id) => axios.post(`${HOST}/my_dashboard/ajax_get_card_detail/${id}`);
 
 // 获取需求短链
