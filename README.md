@@ -1,5 +1,5 @@
 ## CM-COMMIT 
-> 一个TAPD源码关联的git提交工具。
+> 用Nodejs实现的TAPD源码关联的git提交工具。
 
 ### 安装
 ---
@@ -15,9 +15,9 @@
 
 `cmc [option]`
 
-第一次执行`cmc`命令，需要添加TAPD的账号密码，后续可以通过`cmc -u`进行修改。
+首次次执行`cmc`命令，需要添加TAPD的账号密码，可以通过`cmc -u`进行修改。
 
-后续执行`cmc | cmc -m [msg]`命令，会进行登录并从TAPD拉到登录用户的代办**Bug & Story**,选择后则会直接获取到该代办的关键字并进行一次`git commit`。
+后续执行`cmc | cmc -m [msg]`命令，会进行登录并从TAPD拉到登录用户的待办,选择后则会直接获取到该待办的关键字并进行一次`git commit`。
 
 Option参数
   - -v, --version 查看版本号

@@ -222,7 +222,7 @@ const run = async (msg) => {
 
 const program = new Command();
 program
-  .version('1.4.0', '-v, --version', '查看版本号')
+  .version('1.4.1', '-v, --version', '查看版本号')
   .description('自动拉取tapd源码关联关键字并提交')
   .option('-u, --user', '修改账号密码')
   .option('-l, --last [value]', '获取上一次源码关联的commit')

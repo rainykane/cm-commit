@@ -1,11 +1,8 @@
 {
   "name": "cm-commit",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "快速提交tapd源码关联关键字",
   "main": "index.js",
-  "scripts": {
-    "install": "node ./bin/install.js"
-  },
   "author": "kane",
   "license": "ISC",
   "bin": {
