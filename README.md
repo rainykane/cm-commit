@@ -4,11 +4,11 @@
 ### 安装
 ---
 
-`npm i -g cm-commit --registry http://47.106.165.142:4873`
+`npm i -g cm-commit`
 
 **如果npm全局包安装位置需要权限的话 `--unsafe-perm`**
 
-`sudo npm i -g cm-commit --registry http://47.106.165.142:4873 --unsafe-perm`
+`sudo npm i -g cm-commit --unsafe-perm`
 
 ### 使用
 ---
@@ -26,3 +26,5 @@ Option参数
   - -m, --commit [msg] 需要自定义提交信息时使用
   - -h, --help display help for command
 
+### 注意事项
+1. 使用 `cmc` 拉取的待办事项中类型为 Task 的任务，在提交源码关联关键字的时候取的是其对应 Story 的源码关键字。

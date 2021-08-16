@@ -1,7 +1,8 @@
 {
   "name": "cm-commit",
-  "version": "1.4.1",
+  "version": "1.4.3",
   "description": "快速提交tapd源码关联关键字",
+  "keywords": ["tapd", "git", "node", "codemao"],
   "main": "index.js",
   "author": "kane",
   "license": "ISC",
